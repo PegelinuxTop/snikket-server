@@ -130,6 +130,9 @@ modules_enabled = {
 
 registration_watchers = {} -- Disable by default
 registration_notification = "New user registered: $username"
+contact_info = {
+	"abuse": {"mailto:"..ENV_SNIKKET_ADMIN_EMAIL};
+}
 
 http_ports  = { ENV_SNIKKET_TWEAK_INTERNAL_HTTP_PORT or 5280 }
 http_interfaces = { ENV_SNIKKET_TWEAK_INTERNAL_HTTP_INTERFACE or "127.0.0.1" }
