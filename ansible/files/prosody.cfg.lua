@@ -86,7 +86,7 @@ modules_enabled = {
 	-- Spam/abuse management
 		"spam_reporting"; -- Allow users to report spam/abuse
 		"watch_spam_reports"; -- Alert admins of spam/abuse reports by users
-	"server_contact_info";
+	    "server_contact_info";
 
 	-- TODO...
 		--"groups"; -- Shared roster support
@@ -131,12 +131,12 @@ modules_enabled = {
 registration_watchers = {} -- Disable by default
 registration_notification = "New user registered: $username"
 contact_info = {
-	"abuse" = {"mailto:"..ENV_SNIKKET_ADMIN_EMAIL};
-	"admin" = {"mailto:"..ENV_SNIKKET_ADMIN_EMAIL};
-	"feedback" = {"mailto:"..ENV_SNIKKET_ADMIN_EMAIL};
-	"sales" = {"mailto:"..ENV_SNIKKET_ADMIN_EMAIL};
-	"security" = {"mailto:"..ENV_SNIKKET_ADMIN_EMAIL};
-	"support" = {"mailto:"..ENV_SNIKKET_ADMIN_EMAIL};
+	"abuse" = { "mailto:"..ENV_SNIKKET_ADMIN_EMAIL };
+	"admin" = { "mailto:"..ENV_SNIKKET_ADMIN_EMAIL };
+	"feedback" = { "mailto:"..ENV_SNIKKET_ADMIN_EMAIL };
+	"sales" = { "mailto:"..ENV_SNIKKET_ADMIN_EMAIL };
+	"security" = { "mailto:"..ENV_SNIKKET_ADMIN_EMAIL };
+	"support" = { "mailto:"..ENV_SNIKKET_ADMIN_EMAIL };
 }
 
 http_ports  = { ENV_SNIKKET_TWEAK_INTERNAL_HTTP_PORT or 5280 }
