@@ -86,6 +86,7 @@ modules_enabled = {
 	-- Spam/abuse management
 		"spam_reporting"; -- Allow users to report spam/abuse
 		"watch_spam_reports"; -- Alert admins of spam/abuse reports by users
+	        "server_contact_info";
 
 	-- TODO...
 		--"groups"; -- Shared roster support
