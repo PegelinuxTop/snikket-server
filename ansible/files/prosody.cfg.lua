@@ -160,11 +160,6 @@ contact_info = {
 	support = { "mailto:"..ENV_SNIKKET_ADMIN_EMAIL };
 };
 
-contact_info = {
-	abuse = ENV_SNIKKET_ABUSE_EMAIL and {"mailto:"..ENV_SNIKKET_ABUSE_EMAIL} or nil;
-	security = ENV_SNIKKET_SECURITY_EMAIL and {"mailto:"..ENV_SNIKKET_SECURITY_EMAIL} or nil;
-}
-
 http_ports  = { ENV_SNIKKET_TWEAK_INTERNAL_HTTP_PORT or 5280 }
 http_interfaces = { ENV_SNIKKET_TWEAK_INTERNAL_HTTP_INTERFACE or "127.0.0.1" }
 http_max_content_size = 1024 * 1024 -- non-streaming uploads limited to 1MB (improves RAM usage)
