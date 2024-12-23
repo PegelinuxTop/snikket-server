@@ -13,12 +13,12 @@
 - name: "Add Prosody package repo"
   apt_repository:
     filename: prosody
-    repo: "deb https://packages.prosody.im/debian bullseye/snapshots/{{ prosody.snapshot }} main"
+    repo: "deb https://packages.prosody.im/debian bookworm/snapshots/{{ prosody.snapshot }} main"
 - name: "Install Prosody package"
   apt:
     name: "{{ prosody.package }}"
     state: present
-    install_recommends: yes
+    install_recommends: no
 - name: "Deploy Prosody config"
   copy:
     src: ../files/prosody.cfg.lua
@@ -34,6 +34,10 @@
   file:
     state: directory
     path: /etc/prosody/modules
+- name: "Create Prosody firewall directory"
+  file:
+    state: directory
+    path: /etc/prosody/firewall
 - name: "Create web root directory"
   file:
     state: directory
@@ -50,26 +54,26 @@
   service:
     name: prosody
     enabled: no
+    use: sysvinit
 - name: "Stop Prosody if running"
   service:
     name: prosody
     state: stopped
+    use: sysvinit
 - name: "Allow Prosody to bind service ports"
   command: setcap 'cap_net_bind_service=+ep' /usr/bin/lua5.4
 
-- name: Install Mercurial
-  apt:
-    name: mercurial
-    state: present
-    install_recommends: no
+- name: "Create Prosody modules source directory"
+  file:
+    state: directory
+    path: /usr/local/lib/prosody-modules
 
-- name: Clone prosody-modules
-  hg:
-    repo: https://hg.prosody.im/prosody-modules
+- name: Download prosody-modules
+  unarchive:
+    src: "https://hg.prosody.im/prosody-modules/archive/{{ prosody_modules.revision }}.tar.gz"
+    remote_src: true
+    extra_opts: "--strip-components=1"
     dest: /usr/local/lib/prosody-modules
-    revision: "{{ prosody_modules.revision }}"
-    purge: yes
-    update: yes
 - name: Enable wanted modules (prosody-modules)
   file:
     state: link
@@ -117,6 +121,22 @@
     - mod_measure_malloc
     - mod_http_xep227
     - mod_portcheck
+    - mod_sasl2
+    - mod_sasl2_bind2
+    - mod_sasl2_sm
+    - mod_sasl2_fast
+    - mod_client_management
+    - mod_audit
+    - mod_audit_auth
+    - mod_audit_status
+    - mod_audit_user_accounts
+    - mod_password_policy
+    - mod_s2s_status
+    - mod_sasl_ssdp
+    - mod_privilege
+    - mod_admin_blocklist
+    - mod_muc_moderation
+    - mod_push2
 
 - name: Enable wanted modules (snikket-modules)
   file:
@@ -131,6 +151,18 @@
     - mod_snikket_client_id
     - mod_snikket_ios_preserve_push
     - mod_snikket_restricted_users
+    - mod_snikket_deprecate_general_muc
+    - mod_migrate_snikket_roles
+    - mod_health_report
+    - mod_snikket_server_vcard
+    - mod_snikket_billing
+    - mod_snikket_version
+
+- name: "Install mod_firewall rules"
+  copy:
+    src: ../files/restricted_users.pfw
+    dest: /etc/prosody/firewall/
+    mode: 0644
 
 - name: "Install lua-ossl for encrypted push notifications"
   apt:
@@ -155,3 +187,42 @@
     name: dns-root-data
     state: present
     install_recommends: no
+
+- name: "Install Prosody-Migrator"
+  apt:
+    name: prosody-migrator-trunk
+    state: present
+    install_recommends: no
+- name: "Copy Prosody-Migrator config"
+  copy:
+    src: ../files/migrator.cfg.lua
+    dest: /etc/prosody/migrator.cfg.lua
+- name: "Install LuaDBI driver for SQLite3"
+  apt:
+    name: lua-dbi-sqlite3
+    state: present
+    install_recommends: no
+
+- name: "Apply Prosody module patches"
+  patch:
+    src: "{{item}}"
+    basedir: "/usr/lib/prosody/modules"
+    strip: 1
+  with_fileglob:
+    - "../files/patches/prosody/modules/*.patch"
+
+- name: Create Snikket resources directory
+  file:
+    state: directory
+    path: /usr/local/share/snikket
+    owner: root
+    group: root
+    mode: 0755
+
+- name: Install Snikket logo
+  copy:
+    src: ../files/snikket-logo.png
+    dest: /usr/local/share/snikket/logo.png
+    owner: root
+    group: root
+    mode: 0644

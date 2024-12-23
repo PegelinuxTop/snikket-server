@@ -1,4 +1,4 @@
-FROM debian:bullseye-slim
+FROM debian:bookworm-slim
 
 ARG BUILD_SERIES=dev
 ARG BUILD_ID=0
@@ -20,6 +20,9 @@ ADD ansible /opt/ansible
 
 ADD snikket-modules /usr/local/lib/snikket-modules
 
+# Required for idn2 to work, and probably generally good
+ENV LANG=C.UTF-8
+
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         software-properties-common ca-certificates \
@@ -33,11 +36,11 @@ RUN apt-get update \
          software-properties-common \
          gpg gpg-agent \
          python3-passlib \
-         mercurial libcap2-bin build-essential \
+         libcap2-bin build-essential \
     && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /var/cache/*
 
-RUN echo "Snikket $BUILD_SERIES $BUILD_ID" > /usr/lib/prosody/prosody.version
+RUN echo "Snikket $BUILD_SERIES $BUILD_ID" > /usr/lib/prosody/snikket.version
 
 VOLUME ["/snikket"]

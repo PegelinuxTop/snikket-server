@@ -115,8 +115,8 @@ obtain certificates.
 
 ### apache2
 
-**Note**: enable the needed apache2 mods, _proxy_wstunnel_ is only needed if you want to enable connections from webclients like [converse.js](https://conversejs.org) :
-`a2enmod ssl proxy proxy_http proxy_wstunnel`
+**Note**: enable the needed apache2 mods, the parameter upgrade=websocket and timeout is only needed if you want to enable connections from webclients like [converse.js](https://conversejs.org) :
+`a2enmod ssl proxy proxy_http`
 
 
 ```
@@ -147,17 +147,10 @@ obtain certificates.
         SSLCertificateKeyFile /path/to/certificatefolder/privkey.pem
         SSLCertificateChainFile /path/to/certificatefolder/chain.pem
 
-        ProxyPass           / https://127.0.0.1:5443/
+        ProxyPass           / https://127.0.0.1:5443/ upgrade=websocket timeout=900
         ProxyPassReverse    / https://127.0.0.1:5443/
-	
-	# Only needed for webclients like converse.js that need websockets
-        <IfModule mod_proxy_wstunnel.c>
-          ProxyTimeout 900
-          ProxyPass /xmpp-websocket "wss://127.0.0.1:5443/xmpp-websocket"
-        </IfModule>
 
 </VirtualHost>
-
 ```
 
 ### Caddy
@@ -180,6 +173,31 @@ share.chat.example.com {
 	}
 }
 ```
+
+### Nginx Proxy Manager
+
+Unfortunately setup with Nginx Proxy Manager (NPM) is rather difficult due to
+a bug in NPM that causes it to block some requests that Snikket needs to
+function. Specifically, NPM does not currently forward the `/.well-known`
+directory, which is needed for some features of Snikket to work correctly,
+including certificate management and web client discovery.
+
+**Bug report:** https://github.com/NginxProxyManager/nginx-proxy-manager/issues/210
+
+If Snikket and NPM are running on the same machine, you could try [this
+workaround](https://github.com/NginxProxyManager/nginx-proxy-manager/issues/210#issuecomment-1068955629).
+
+Another option is to export the certificates that NPM obtains, and import them
+into Snikket (at `/snikket/letsencrypt/live/` inside the Snikket containers).
+You would need to do this regularly (i.e. automate it), as certificates need
+to be updated every few weeks. You should disable Snikket's cert manager
+container if you do this.
+
+Either of these workarounds will allow Snikket to start, but you may still
+have some problems, e.g. connecting from some web clients may not work, due to
+NPM also blocking other things located in `/.well-known`. Unfortunately there
+is not much we can do about this, as this is a limitation of NPM's current
+design.
 
 ## Other setups
 

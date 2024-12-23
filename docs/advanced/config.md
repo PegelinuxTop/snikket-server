@@ -19,6 +19,8 @@ In most situations, the configuration options shown in the example config in
 Also, it is very likely not complete.
 {{< /panel >}}
 
+After modifying any options in snikket.conf, you must run 'docker-compose up -d' to apply the changes.
+
 ## Configuration Option Reference
 
 This reference is in no particular order. Most importantly, it is certainly not in the order of "things you should try to mess with come first".
@@ -74,24 +76,65 @@ This will not expose your server's IP address or domain name to the Snikket org,
 
 Email address of the admin. This will be sent to all new users as contact information.
 
+### `SNIKKET_ABUSE_EMAIL`
+
+Optional. **Public.** Email address to which people should send abuse reports. It will be publicly visible to the XMPP network and on the instance website.
+
+### `SNIKKET_SECURITY_EMAIL`
+
+Optional. **Public.** Email address to which people should send security reports. It will be publicly visible to the XMPP network and on the instance website.
+
 ### `SNIKKET_WEB_AVATAR_CACHE_TTL`
 
 The time (in seconds) for which the web portal will allow avatars to be cached by browsers.
 
+### `SNIKKET_PROXY65_PORT`
+
+The port to use for the internal file transfer proxy (used for transferring large files).
+Defaults to port 5000, but can be changed if something else is using this port (the apps
+will automatically discover the configured port). Don't forget to update your firewall
+rules if you change this.
 
 ## Advanced Configuration Reference
+
+It should generally not be necessary to use the options in this section. These
+options have a high chance of breaking your Snikket setup (sometimes in subtle
+ways) or reducing security, if used incorrectly.
+
+### `SNIKKET_CERTBOT_OPTIONS`
+
+Add extra options to the certbot command-line.
+
+### `SNIKKET_CERTBOT_KEY_OPTIONS`
+
+Defaults to `--reuse-key`. Set to `--no-reuse-key` to rotate the private key
+on every certificate renewal. Note that rotating the key may invalidate things
+that depend on a stable public key, such as DANE and certificate monitoring
+utilities.
+
+### `SNIKKET_TWEAK_TURNSERVER_PORT`
+
+Controls the primary listening port of the TURN server (default: 3478).
+
+This option is used to select the port that clients should use for STUN/TURN.
+
+If using the built-in TURN server, the TURN server will automatically listen
+on the selected port.
+
+If you are using an external TURN server, make sure this option is set to the
+port that your TURN server is using (3478 is the default if unset).
 
 ### `SNIKKET_TWEAK_TURNSERVER_MIN_PORT`
 
 Controls the lowest port number used for TURN relay services.
 
-See [the firewall docs](firewall.md) for details.
+See [the firewall docs](../firewall) for details.
 
 ### `SNIKKET_TWEAK_TURNSERVER_MAX_PORT`
 
 Controls the highest port number used for TURN relay services.
 
-See [the firewall docs](firewall.md) for details.
+See [the firewall docs](../firewall) for details.
 
 
 ## Arcane Configuration Reference
@@ -105,6 +148,41 @@ The TCP port on which the internal HTTP API listens on. The default is `5280`. D
 ### `SNIKKET_TWEAK_INTERNAL_HTTP_INTERFACE`
 
 The IP address on which the internal HTTP API listens on. The default is `127.0.0.1`, so that the API is only accessible from the same server. Changing this may be a security risk as some general system information is accessible without authentication.
+
+### `SNIKKET_TWEAK_HTTP_TLS_VERSIONS`
+
+The TLS versions to offer for HTTPS. Changing this may make your setup less
+secure, or else prevent some browsers or operating systems from connecting to
+your instance.
+
+By default we follow Mozilla's TLS 'intermediate' profile, which balances
+strong security with allowing a range of browsers and clients to connect.
+
+To follow Mozilla's 'strict' profile (which may cause connectivity issues with
+Android < 9, Windows < 11, Safari/iOS < 12, and others), set:
+
+```
+SNIKKET_TWEAK_HTTP_TLS_VERSIONS=TLSv1.3
+SNIKKET_TWEAK_HTTP_TLS_CIPHERS=
+```
+
+### `SNIKKET_TWEAK_HTTP_TLS_CIPHERS`
+
+The TLS ciphers to offer for HTTPS. See the previous option about TLS version
+configuration for more details.
+
+### `SNIKKET_TWEAK_WEB_PROXY_PROTOCOLS`
+
+This is for customization of the web proxy configuration. After adding new
+configuration templates, this can be used to load them, it's a list of
+space-separated names.
+
+Defaults to `http https`.
+
+### `SNIKKET_TWEAK_WEB_PROXY_RELOAD_INTERVAL`
+
+The number of seconds between reloads of the web proxy (i.e. to pick up new
+certificates). Specified as a number of seconds, or `inf` to disable reloads.
 
 ### `SNIKKET_INVITE_URL`
 
@@ -122,9 +200,9 @@ Also better do not set this.
 
 ### `SNIKKET_TWEAK_IPV6`
 
-Enable IPv6 support.
+Disable IPv6 support by setting to `0`.
 
-By default, IPv6 is disabled because most container runtimes default to it being disabled. Enabling IPv6 in the server could cause issues if the container runtime does not support it.
+By default, IPv6 is enabled because Snikket uses host networking and gracefully handles IPv6 hosts being unreachable.
 
 ### `SNIKKET_TWEAK_PROMETHEUS`
 
@@ -158,10 +236,52 @@ Expose the file share service at the `SNIKKET_DOMAIN` instead of at `share.SNIKK
 
 This nowadays conflicts with the web portal, so you should not set it.
 
+### `SNIKKET_TWEAK_GENERAL_MUC`
+
+Config for the deprecated general MUC (if it exists). Can be `hidden` or
+`destroyed`. Defaults to `hidden`.
+
 ### `SNIKKET_TWEAK_DNSSEC`
 
 Enable DNSSEC support. Requires a DNSSEC-capable resolver.
+This also enables DANE for outgoing connections.
 
 ### `SNIKKET_TWEAK_EXTRA_CONFIG`
 
 Path or glob for extra configuration files to load.
+
+### `SNIKKET_TWEAK_STORAGE`
+
+Sneak preview of SQLite storage. Valid values are `files` (the default) and `sqlite` (potential future default).
+
+### `SNIKKET_TWEAK_PUSH2`
+
+Preview of "Push 2.0", a planned upgrade to how push notifications currently
+work. This is not yet supported by any clients, the specification is still
+being worked on, and this toggle is only to enable developers to test against
+the prototype.
+
+When set to `1` support for Push 2.0 will be enabled.
+
+### `SNIKKET_TWEAK_REQUIRE_SASL2`
+
+When set to `1` this will disable support for legacy SASL, requiring all
+clients to support SASL2. We plan for this to be the default in the future due
+to increased security, speed and other features, but currently there are many
+apps without SASL2 support and this would prevent them connecting.
+
+The tweak is available now so developers can ensure their client will work in
+SASL2-only mode, or admins can disable legacy SASL early if they are certain
+of only using SASL2-capable clients.
+
+### `SNIKKET_TWEAK_RESTRICTED_USERS_V2`
+
+When set to `1` this will enable an alternative implementation of "restricted
+users". It is primarily for testing the implementation that is expected to
+become the default in a future release.
+
+### `SNIKKET_TWEAK_S2S_STATUS`
+
+When set to `1` this will enable a module that monitors the list and health of
+server-to-server connections. This is only useful for developers, as the
+information cannot currently be viewed in the user interface.

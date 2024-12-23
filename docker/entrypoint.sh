@@ -5,6 +5,8 @@ if [ -z "$SNIKKET_DOMAIN" ]; then
   exit 1;
 fi
 
+export SNIKKET_DOMAIN_ASCII=$(idn2 "$SNIKKET_DOMAIN")
+
 if [ -z "$SNIKKET_ADMIN_EMAIL" ]; then
   echo "Please provide SNIKKET_ADMIN_EMAIL";
   exit 1;
@@ -15,12 +17,12 @@ if [ -z "$SNIKKET_SMTP_URL" ]; then
 fi
 
 if [ -z "$SNIKKET_EXTERNAL_IP" ]; then
-	SNIKKET_EXTERNAL_IP="$(dig +short $SNIKKET_DOMAIN)"
+	SNIKKET_EXTERNAL_IP="$(dig +short $SNIKKET_DOMAIN_ASCII)"
 fi
 
 echo "$SNIKKET_SMTP_URL" | smtp-url-to-msmtp > /etc/msmtprc
 
-echo "from snikket@$SNIKKET_DOMAIN" >> /etc/msmtprc
+echo "from snikket@$SNIKKET_DOMAIN_ASCII" >> /etc/msmtprc
 
 unset SNIKKET_SMTP_URL
 
@@ -48,6 +50,34 @@ if test -f /snikket/prosody/turn-auth-secret; then
 	rm /snikket/prosody/turn-auth-secret;
 fi
 
+# Migrate between storage backends if needed
+# Note: this happens before we do any other operations that touch Prosody's
+# data store, to ensure consistency.
+
+if test "${SNIKKET_TWEAK_STORAGE:-files}" = "sqlite" && ! test -f /snikket/prosody/prosody.sqlite; then
+	sed -i "s/SNIKKET_DOMAIN/$SNIKKET_DOMAIN/" /etc/prosody/migrator.cfg.lua
+	if prosody-migrator files sqlite; then
+		# Migration succeeded, delete leftovers
+		find /snikket/prosody -mindepth 2 -maxdepth 3 -type f \( -name \*.dat -o -name \*.list -o -name \*.lidx \) -delete
+		find /snikket/prosody -mindepth 1 -type d -empty -delete
+	else
+		# Migration failed, delete sqlite file and try again
+		rm -fv /snikket/prosody/prosody.sqlite
+		exit 1
+	fi
+elif test "${SNIKKET_TWEAK_STORAGE:-files}" = "files" && test -f /snikket/prosody/prosody.sqlite; then
+	sed -i "s/SNIKKET_DOMAIN/$SNIKKET_DOMAIN/" /etc/prosody/migrator.cfg.lua
+	if prosody-migrator sqlite files; then
+		# Migration succeeded, delete leftover database
+		rm -fv /snikket/prosody/prosody.sqlite
+	else
+		# Migration failed, delete files and try again
+		find /snikket/prosody -mindepth 2 -maxdepth 3 -type f \( -name \*.dat -o -name \*.list -o -name \*.lidx \) -delete
+		find /snikket/prosody -mindepth 1 -type d -empty -delete
+		exit 1
+	fi
+fi
+
 if test -d /snikket/prosody/http_upload; then
 	prosodyctl mod_migrate_http_upload "share.$SNIKKET_DOMAIN" "$SNIKKET_DOMAIN"
 fi
@@ -57,4 +87,7 @@ if ! test -d /snikket/prosody/*/account_roles; then
 	prosodyctl mod_authz_internal migrate "$SNIKKET_DOMAIN"
 fi
 
-exec supervisord -c /etc/supervisor/supervisord.conf
+# Migrate from prosody:normal to prosody:registered
+prosodyctl mod_migrate_snikket_roles migrate "$SNIKKET_DOMAIN"
+
+exec s6-svscan /etc/sv

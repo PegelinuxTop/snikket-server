@@ -1,6 +1,6 @@
 --luacheck: ignore 143/module
 
-local http_formdecode = require "net.http".formdecode;
+local http_formdecode = require "prosody.net.http".formdecode;
 
 local secret = module:get_option_string("invites_bootstrap_secret");
 if not secret then return; end
@@ -36,7 +36,7 @@ local function handle_request(event)
 
 	-- Create invite
 	local invite, invite_err = invites.create_account(nil, {
-		roles = { ["prosody:admin"] = true };
+		roles = { "prosody:admin" };
 		groups = { "default" };
 		source = "api/token/bootstrap-"..current_index;
 	}, bootstrap_invite_ttl);

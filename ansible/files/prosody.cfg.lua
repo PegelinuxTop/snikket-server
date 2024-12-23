@@ -1,9 +1,17 @@
-local DOMAIN = assert(ENV_SNIKKET_DOMAIN, "Please set the SNIKKET_DOMAIN environment variable")
+local function split(s)
+	local v = {};
+	for p in (s or ""):gmatch("[^%s,]+") do
+		v[#v+1] = p;
+	end
+	return v;
+end
 
-local RETENTION_DAYS = tonumber(ENV_SNIKKET_RETENTION_DAYS) or 7;
-local UPLOAD_STORAGE_GB = tonumber(ENV_SNIKKET_UPLOAD_STORAGE_GB);
+local DOMAIN = Lua.assert(ENV_SNIKKET_DOMAIN, "Please set the SNIKKET_DOMAIN environment variable")
 
-if prosody.process_type == "prosody" and not prosody.config_loaded then
+local RETENTION_DAYS = Lua.tonumber(ENV_SNIKKET_RETENTION_DAYS) or 7;
+local UPLOAD_STORAGE_GB = Lua.tonumber(ENV_SNIKKET_UPLOAD_STORAGE_GB);
+
+if Lua.prosody.process_type == "prosody" and not Lua.prosody.config_loaded then
 	-- Wait at startup for certificates
 	local lfs, socket = require "lfs", require "socket";
 	local cert_path = "/etc/prosody/certs/"..DOMAIN..".crt";
@@ -11,10 +19,10 @@ if prosody.process_type == "prosody" and not prosody.config_loaded then
 	while not lfs.attributes(cert_path, "mode") do
 		counter = counter + 1;
 		if counter == 1 or counter%6 == 0 then
-			print("Waiting for certificates...");
+			Lua.print("Waiting for certificates...");
 		elseif counter > 60 then
-			print("No certificates found... exiting");
-			os.exit(1);
+			Lua.print("No certificates found... exiting");
+			Lua.os.exit(1);
 		end
 		socket.sleep(5);
 	end
@@ -45,15 +53,28 @@ modules_enabled = {
 		"blocklist"; -- Allow users to block communications with other users
 		"vcard4"; -- User profiles (stored in PEP)
 		"vcard_legacy"; -- Conversion between legacy vCard and PEP Avatar, vcard
+		"password_policy";
 
 	-- Nice to have
-		"version"; -- Replies to server version requests
 		"uptime"; -- Report how long server has been running
 		"time"; -- Let others know the time here on this server
 		"ping"; -- Replies to XMPP pings with pongs
 		"register"; -- Allow users to register on this server using a client and change passwords
 		"mam"; -- Store messages in an archive and allow users to access it
 		"csi_simple"; -- Simple Mobile optimizations
+
+	-- SASL2/FAST
+		"sasl2";
+		"sasl2_bind2";
+		"sasl2_sm";
+		"sasl2_fast";
+		"client_management";
+
+	-- Event auditing
+		"audit";
+		"audit_auth"; -- Audit authentication attempts and new clients
+		"audit_status"; -- Audit status changes of the server (start, stop, crash)
+		"audit_user_accounts"; -- Audit status changes of user accounts (created, deleted, etc.)
 
 	-- Push notifications
 		"cloud_notify";
@@ -77,22 +98,23 @@ modules_enabled = {
 		"update_notify";
 		"turn_external";
 		"admin_shell";
-		"isolate_host";
 		"snikket_client_id";
 		"snikket_ios_preserve_push";
 		"snikket_restricted_users";
 		"lastlog2";
+		"admin_blocklist";
+		"snikket_server_vcard";
+		"snikket_version"; -- Replies to server version requests
 
 	-- Spam/abuse management
 		"spam_reporting"; -- Allow users to report spam/abuse
 		"watch_spam_reports"; -- Alert admins of spam/abuse reports by users
+		"server_contact_info"; -- Publish contact information for this service
 
 	-- TODO...
 		--"groups"; -- Shared roster support
-		--"server_contact_info"; -- Publish contact information for this service
 		--"announce"; -- Send announcement to all online users
 		--"motd"; -- Send a message to users when they log in
-		"welcome"; -- Welcome users who register accounts
 		"http_files"; -- Serve static files from a directory over HTTP
 
 	-- Invites
@@ -138,6 +160,11 @@ contact_info = {
 	support = { "mailto:"..ENV_SNIKKET_ADMIN_EMAIL };
 };
 
+contact_info = {
+	abuse = ENV_SNIKKET_ABUSE_EMAIL and {"mailto:"..ENV_SNIKKET_ABUSE_EMAIL} or nil;
+	security = ENV_SNIKKET_SECURITY_EMAIL and {"mailto:"..ENV_SNIKKET_SECURITY_EMAIL} or nil;
+}
+
 http_ports  = { ENV_SNIKKET_TWEAK_INTERNAL_HTTP_PORT or 5280 }
 http_interfaces = { ENV_SNIKKET_TWEAK_INTERNAL_HTTP_INTERFACE or "127.0.0.1" }
 http_max_content_size = 1024 * 1024 -- non-streaming uploads limited to 1MB (improves RAM usage)
@@ -146,8 +173,21 @@ https_ports = {};
 
 c2s_direct_tls_ports = { 5223 }
 
+proxy65_ports = { ENV_SNIKKET_PROXY65_PORT or 5000 }
+
 allow_registration = true
 registration_invite_only = true
+
+password_policy = {
+	length = 10;
+}
+
+-- In the future we want to switch to SASL2 for better security,
+-- as client ids are not supported in SASL1 (identification is via
+-- the resource string, which is semi-public and not authenticated)
+-- This tweak is for developers to test with the future configuration,
+-- or people who want to opt into the new security sooner.
+enforce_client_ids = ENV_SNIKKET_TWEAK_REQUIRE_SASL2 == "1"
 
 -- This disables in-app invites for non-admins
 -- TODO: The plan is to enable it once we can
@@ -158,25 +198,46 @@ allow_contact_invites = false
 -- Disallow restricted users to create invitations to the server
 deny_user_invites_by_roles = { "prosody:restricted" }
 
+-- This role was renamed 'guest' in Prosody.
+custom_roles = { { name = "prosody:restricted"; priority = 15 } }
+
 invites_page = ENV_SNIKKET_INVITE_URL or ("https://"..DOMAIN.."/invite/{invite.token}/");
 invites_page_external = true
 
-invites_bootstrap_index = tonumber(ENV_TWEAK_SNIKKET_BOOTSTRAP_INDEX)
+invites_bootstrap_index = Lua.tonumber(ENV_TWEAK_SNIKKET_BOOTSTRAP_INDEX)
 invites_bootstrap_secret = ENV_TWEAK_SNIKKET_BOOTSTRAP_SECRET
-invites_bootstrap_ttl = tonumber(ENV_TWEAK_SNIKKET_BOOTSTRAP_TTL or (28 * 86400)) -- default 28 days
+invites_bootstrap_ttl = Lua.tonumber(ENV_TWEAK_SNIKKET_BOOTSTRAP_TTL or (28 * 86400)) -- default 28 days
+
+-- The Resource Owner Credentials grant used internally between the web portal
+-- and Prosody, so ensure this is enabled. Other unused flows can be disabled.
+allowed_oauth2_grant_types = { "password" }
+allowed_oauth2_response_types = {}
+
+-- Longer access token lifetime than the default
+-- TODO: Use the already longer-lived refresh tokens
+oauth2_access_token_ttl = 86400
 
 c2s_require_encryption = true
 s2s_require_encryption = true
 s2s_secure_auth = true
 
+-- Grant federation privileges to regular users but not restricted users.
+-- This is enforced by mod_isolate_host.
+add_permissions = {
+	["prosody:registered"] = {
+		"xmpp:federate";
+	};
+}
+
 archive_expires_after = ("%dd"):format(RETENTION_DAYS) -- Remove archived messages after N days
 
--- Disable IPv6 by default because Docker does not
--- have it enabled by default, and s2s to domains
--- with A+AAAA records breaks (as opposed to just AAAA)
--- TODO: implement happy eyeballs in net.connect
--- https://issues.prosody.im/1246
-use_ipv6 = (ENV_SNIKKET_TWEAK_IPV6 == "1")
+-- Delay full account deletion via IBR for RETENTION_DAYS, to allow restoration
+-- in case of accidental or malicious deletion of an account
+registration_delete_grace_period = ("%d days"):format(RETENTION_DAYS)
+
+-- Allow disabling IPv6 because Docker does not have it enabled by default, but
+-- we don't use Docker networking so it should not matter.
+use_ipv6 = (ENV_SNIKKET_TWEAK_IPV6 ~= "0")
 
 log = {
 	[ENV_SNIKKET_LOGLEVEL or "info"] = "*stdout"
@@ -184,7 +245,18 @@ log = {
 
 authentication = "internal_hashed"
 authorization = "internal"
-storage = "internal"
+disable_sasl_mechanisms = { "PLAIN", "OAUTHBEARER" }
+
+if ENV_SNIKKET_TWEAK_STORAGE == "sqlite" then
+	storage = "sql"
+	sql = {
+		driver = "SQLite3";
+		database = "/snikket/prosody/prosody.sqlite";
+	}
+else
+	storage = "internal"
+end
+
 statistics = "internal"
 
 if ENV_SNIKKET_TWEAK_PROMETHEUS == "1" then
@@ -202,14 +274,20 @@ end
 if ENV_SNIKKET_TWEAK_DNSSEC == "1" then
 	local trustfile = "/usr/share/dns/root.ds"; -- Requires apt:dns-root-data
 	-- Bail out if it doesn't work
-	assert(require"lunbound".new{ resolvconf = true; trustfile = trustfile }:resolve ".".secure,
+	Lua.assert(Lua.require"lunbound".new{ resolvconf = true; trustfile = trustfile }:resolve ".".secure,
 		"Upstream DNS resolver is not DNSSEC-capable. Fix this or disable SNIKKET_TWEAK_DNSSEC");
 	unbound = { trustfile = trustfile }
+
+	-- Since we have DNSSEC, we can also do DANE
+	use_dane = true
 end
 
 certificates = "certs"
 
 group_default_name = ENV_SNIKKET_SITE_NAME or DOMAIN
+
+site_name = ENV_SNIKKET_SITE_NAME or DOMAIN
+site_logo = "/usr/local/share/snikket/logo.png"
 
 -- Update check configuration
 software_name = "Snikket"
@@ -228,7 +306,9 @@ http_external_url = "https://"..DOMAIN.."/"
 
 if ENV_SNIKKET_TWEAK_TURNSERVER ~= "0" or ENV_SNIKKET_TWEAK_TURNSERVER_DOMAIN then
 	turn_external_host = ENV_SNIKKET_TWEAK_TURNSERVER_DOMAIN or DOMAIN
-	turn_external_secret = ENV_SNIKKET_TWEAK_TURNSERVER_SECRET or assert(io.open("/snikket/prosody/turn-auth-secret-v2")):read("*l");
+	turn_external_port = ENV_SNIKKET_TWEAK_TURNSERVER_PORT
+	turn_external_secret = ENV_SNIKKET_TWEAK_TURNSERVER_SECRET or Lua.assert(Lua.io.open("/snikket/prosody/turn-auth-secret-v2")):read("*l");
+	turn_external_tcp = true
 end
 
 -- Allow restricted users access to push notification servers
@@ -236,6 +316,9 @@ isolate_except_domains = { "push.snikket.net", "push-ios.snikket.net" }
 
 VirtualHost (DOMAIN)
 	authentication = "internal_hashed"
+
+	modules_enabled = {}
+	firewall_scripts = {}
 
 	http_files_dir = "/var/www"
 	http_paths = {
@@ -246,29 +329,57 @@ VirtualHost (DOMAIN)
 	}
 
 	if ENV_SNIKKET_TWEAK_PROMETHEUS == "1" then
-		modules_enabled = {
+		modules_enabled: append {
 			"http_openmetrics";
 		}
 	end
 
-	welcome_message = [[Hi, welcome to Snikket on $host! Thanks for joining us.]]
-	.."\n\n"
-	..[[For help and enquiries related to this service you may contact the admin via email: ]]
-	..ENV_SNIKKET_ADMIN_EMAIL
-	.."\n\n"
-	..[[Happy chatting!]]
+	if ENV_SNIKKET_TWEAK_S2S_STATUS == "1" then
+		modules_enabled: append {
+			"s2s_status";
+		}
+	end
+
+	if ENV_SNIKKET_TWEAK_PUSH2 == "1" then
+		modules_enabled: append {
+			"push2";
+		}
+	end
+
+	if ENV_SNIKKET_TWEAK_RESTRICTED_USERS_V2 == "1" then
+		firewall_scripts: append {
+			"/etc/prosody/firewall/restricted_users.pfw";
+		}
+	else
+		modules_enabled: append {
+			"isolate_host";
+		}
+	end
+
 
 Component ("groups."..DOMAIN) "muc"
 	modules_enabled = {
 		"muc_mam";
+		"muc_moderation";
 		"muc_local_only";
 		"vcard_muc";
 		"muc_defaults";
 		"muc_offline_delivery";
 		"snikket_restricted_users";
+		"snikket_deprecate_general_muc";
 		"muc_auto_reserve_nicks";
 	}
+
+	if ENV_SNIKKET_TWEAK_S2S_STATUS == "1" then
+		modules_enabled: append {
+			"s2s_status";
+		}
+	end
+
 	restrict_room_creation = "local"
+
+	-- Some older deployments may have the general@ MUC, so we still need
+	-- to protect it:
 	muc_local_only = { "general@groups."..DOMAIN }
 
 	-- Default configuration for rooms (typically overwritten by the client)
@@ -283,22 +394,6 @@ Component ("groups."..DOMAIN) "muc"
 	-- to detect whether push notifications are enabled)
 	muc_registration_include_form = true
 
-	default_mucs = {
-		{
-			jid_node = "general";
-			config = {
-				name = "General Chat";
-				description = "Welcome to "..DOMAIN.." general chat!";
-				change_subject = false;
-				history_length = 30;
-				members_only = false;
-				moderated = false;
-				persistent = true;
-				public = true;
-				public_jids = true;
-			};
-		}
-	}
 
 Component ("share."..DOMAIN) "http_file_share"
 	-- For backwards compat, allow HTTP upload on the base domain
@@ -318,6 +413,10 @@ Component ("share."..DOMAIN) "http_file_share"
 	end
 	http_paths = {
 		file_share = "/upload"
+	}
+
+	modules_disabled = {
+		"s2s";
 	}
 
 Include (ENV_SNIKKET_TWEAK_EXTRA_CONFIG or "/snikket/prosody/*.cfg.lua")
