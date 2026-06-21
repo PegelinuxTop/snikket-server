@@ -56,6 +56,19 @@ SNIKKET_UPLOAD_STORAGE_GB=1.5
 
 The amount of file storage used is affected by the configured retention period (7 days by default) - i.e. longer retention periods will mean files are stored for longer, and more space will be used. Take this into account when choosing a value.
 
+### `SNIKKET_DAILY_UPLOAD_LIMIT_PER_USER_GB`
+
+Use this option to define an upload limit for each user. By default the daily upload limit per user is set to 1 GB (it equals ten times the maximum file size, which is currently defined as 100 MB).
+
+If the limit is reached, the affected user will be unable to upload new files and has to wait for the next day.
+
+Example:
+
+```
+# Allow no more than 1.5GB disk space to be used by uploaded files
+SNIKKET_DAILY_UPLOAD_LIMIT_PER_USER_GB=1.5
+```
+
 ### `SNIKKET_LOGLEVEL`
 
 Control the detail level of the log output of the snikket server.
@@ -83,6 +96,19 @@ Optional. **Public.** Email address to which people should send abuse reports. I
 ### `SNIKKET_SECURITY_EMAIL`
 
 Optional. **Public.** Email address to which people should send security reports. It will be publicly visible to the XMPP network and on the instance website.
+
+### `SNIKKET_TLS_PROFILE`
+
+Specify the TLS profile to use for chat connections. You only need this if you
+have trouble connecting some older devices to connect to your server.
+
+Valid options:
+
+- `modern` - the default, strongest security. Compatible with Android 10+, iOS 12+.
+- `intermediate` - wide compatibility with older devices, high security level
+- `old` - compatibility with very old devices, not generally recommended
+
+The profiles are based on [Mozilla's server-side TLS profiles](https://wiki.mozilla.org/Security/Server_Side_TLS).
 
 ### `SNIKKET_WEB_AVATAR_CACHE_TTL`
 
@@ -136,6 +162,16 @@ Controls the highest port number used for TURN relay services.
 
 See [the firewall docs](../firewall) for details.
 
+### `SNIKKET_TWEAK_TURNSERVER_INTERNAL_IP`
+
+If your Snikket server is behind a NAT, you can set this option to the
+internal IP address of your server which will receive incoming traffic
+(otherwise Snikket will pick the first internal IP it finds). Although it's
+not ideal to run a TURN server behind a NAT, providing the correct internal IP
+address helps to make TURN more reliable.
+
+**Note:** It's important that your NAT preserves port numbers when routing,
+i.e. `<external ip>:1234` **MUST** be routed to `<internal ip>:1234`.
 
 ## Arcane Configuration Reference
 

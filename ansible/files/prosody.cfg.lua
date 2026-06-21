@@ -10,6 +10,7 @@ local DOMAIN = Lua.assert(ENV_SNIKKET_DOMAIN, "Please set the SNIKKET_DOMAIN env
 
 local RETENTION_DAYS = Lua.tonumber(ENV_SNIKKET_RETENTION_DAYS) or 7;
 local UPLOAD_STORAGE_GB = Lua.tonumber(ENV_SNIKKET_UPLOAD_STORAGE_GB);
+local DAILY_UPLOAD_LIMIT_PER_USER_GB = Lua.tonumber(ENV_SNIKKET_DAILY_UPLOAD_LIMIT_PER_USER_GB);
 
 if Lua.prosody.process_type == "prosody" and not Lua.prosody.config_loaded then
 	-- Wait at startup for certificates
@@ -107,6 +108,7 @@ modules_enabled = {
 		"account_activity";
 		"migrate_lastlog2"; -- Automatically migrate data from mod_lastlog2 if necessary
 		"protect_last_admin";
+		"c2s_limit_sessions";
 
 	-- Spam/abuse management
 		"spam_reporting"; -- Allow users to report spam/abuse
@@ -149,6 +151,8 @@ modules_enabled = {
 		"measure_malloc";
 }
 
+max_resources = Lua.tonumber(ENV_SNIKKET_MAX_USER_CLIENTS) or 10
+
 registration_watchers = {} -- Disable by default
 registration_notification = "New user registered: $username"
 contact_info = {
@@ -161,12 +165,14 @@ contact_info = {
 };
 
 http_ports  = { ENV_SNIKKET_TWEAK_INTERNAL_HTTP_PORT or 5280 }
-http_interfaces = { ENV_SNIKKET_TWEAK_INTERNAL_HTTP_INTERFACE or "127.0.0.1" }
+http_interfaces = split(ENV_SNIKKET_TWEAK_INTERNAL_HTTP_INTERFACE or "127.0.0.1,::1")
 http_max_content_size = 1024 * 1024 -- non-streaming uploads limited to 1MB (improves RAM usage)
 
 https_ports = {};
 
 c2s_direct_tls_ports = { 5223 }
+
+tls_profile = ENV_SNIKKET_TLS_PROFILE or "modern"
 
 proxy65_ports = { ENV_SNIKKET_PROXY65_PORT or 5000 }
 
@@ -423,7 +429,9 @@ Component ("share."..DOMAIN) "http_file_share"
 	-- allow files up to the size limit even if they are encrypted.
 	http_file_share_size_limit = (1024 * 1024 * 100) + 16 -- 100MB + 16 bytes
 	http_file_share_expires_after = 60 * 60 * 24 * RETENTION_DAYS -- N days
-
+	if DAILY_UPLOAD_LIMIT_PER_USER_GB then
+		http_file_share_daily_quota = 1024 * 1024 * 1024 * DAILY_UPLOAD_LIMIT_PER_USER_GB
+	end
 	if UPLOAD_STORAGE_GB then
 		http_file_share_global_quota = 1024 * 1024 * 1024 * UPLOAD_STORAGE_GB
 	end
